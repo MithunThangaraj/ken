@@ -1,86 +1,99 @@
 # ken
 
-A universal file-inspection CLI. `ken` works out what a file is from its
-signature and, for the formats it knows, reads out the metadata inside it. The
-default output is meant for humans; `--json` gives you something to pipe into
-other tools.
+[![CI](https://github.com/MithunThangaraj/ken/actions/workflows/ci.yml/badge.svg)](https://github.com/MithunThangaraj/ken/actions/workflows/ci.yml)
 
-Existing tools each cover part of this. `file` tells you the type and stops
-there, `exiftool` is aimed at media, `mediainfo` only does audio and video, and
-Apache Tika needs a JVM. `ken` does both the detection and the structured
-extraction in one static binary.
+**Tell me what this file is, and what's inside it.**
+
+Point `ken` at any file and it figures out the format from the file's actual
+contents (not its name) and reads out the useful facts: how big an image is,
+how long an audio clip runs, how many pages a PDF has, what's packed inside a
+zip. One command, one small binary, no setup.
+
+```
+$ ken photo.jpg
+photo.jpg
+  type     JPEG image (image)
+  mime     image/jpeg
+  size     2.1 MiB (2201234 bytes)
+  width    4032
+  height   3024
+  depth    8
+  components 3
+  mode     baseline
+  jfif     true
+  exif     false
+```
+
+Rename `photo.jpg` to `photo.txt` and `ken` still knows it's a JPEG, because it
+reads the bytes rather than trusting the extension.
+
+## Why it exists
+
+A few tools already do parts of this. The `file` command names a file's type
+but tells you little else. `exiftool` and `mediainfo` go deep, but only on
+photos, audio, and video. `ken` does both jobs, naming the format and pulling
+out its details, across many kinds of files, all from a single binary.
 
 ## Install
 
 ```sh
 cargo install --path .
-# or, during development:
+# or, while working on it:
 cargo run -- <file>
 ```
 
 ## Usage
 
 ```sh
-ken photo.png                 # human-readable report
-ken --json photo.png          # machine-readable JSON
-ken --detect-only mystery.bin # type only, skip the deep extraction
-ken a.png b.pdf c.wav         # inspect several files at once
+ken report.pdf                # readable summary
+ken --json report.pdf         # same data as JSON, for scripts
+ken --detect-only mystery.bin # just the file type, skip the details
+ken a.png b.pdf c.wav         # several files at once
 ```
 
-Example:
+With `--json`, one file gives you a single object and several files give you an
+array. If a file can't be read, it shows up as an error and `ken` exits with a
+non-zero status.
 
-```
-$ ken sample.wav
-sample.wav
-  type     WAV audio (audio)
-  mime     audio/wav
-  size     86.2 KiB (88244 bytes)
-  codec    PCM
-  channels 2
-  rate     44100 Hz
-  depth    16-bit
-  duration 0.50 s
-```
+## What it can read
 
-Pass several files with `--json` and you get an array; pass one and you get a
-bare object. A file it cannot read becomes an error entry, and the process
-exits non-zero.
+Right now `ken` handles one common format from each major category:
 
-## Supported formats
+| Format | Kind of file | What you get |
+| ------ | ------------ | ------------ |
+| PNG    | image      | size, bit depth, color type, interlace, whether it's animated |
+| JPEG   | image      | size, color components, baseline vs progressive, JFIF/Exif tags |
+| GIF    | image      | size, frame count, whether it animates and loops |
+| PDF    | document   | version, object and page counts, encryption, linearization |
+| ZIP    | archive    | number of entries, sizes, compression ratio, file names, and whether it's really a DOCX/XLSX/PPTX/JAR/EPUB |
+| ELF    | program    | 32/64-bit, endianness, target OS, executable vs library, CPU architecture |
+| WAV    | audio      | codec, channels, sample rate, bit depth, length in seconds |
 
-The current set covers one format per category:
+More formats are easy to add (see below).
 
-| Format | Category   | What it reads |
-| ------ | ---------- | ------------- |
-| PNG    | image      | dimensions, bit depth, color type, interlace, chunk count, text and animation |
-| JPEG   | image      | dimensions, precision, components, baseline vs progressive, JFIF and Exif |
-| GIF    | image      | version, dimensions, frame count, animation, looping |
-| PDF    | document   | version, object count, page estimate, encryption, linearization |
-| ZIP    | archive    | entry count, sizes, compression ratio, container kind (DOCX, XLSX, PPTX, JAR, EPUB, ODF), member names |
-| ELF    | executable | class, endianness, ABI, type, architecture |
-| WAV    | audio      | codec, channels, sample rate, bit depth, duration |
-
-## Architecture
+## How it works
 
 ```
 src/
-  main.rs          clap CLI, output orchestration
-  detect.rs        signature detection into Format
-  report.rs        Report model plus human and JSON rendering
+  main.rs          command-line handling and output
+  detect.rs        identify the format from the leading bytes
+  report.rs        the result, printed as text or JSON
   inspect/
-    mod.rs         Inspector trait, registry, byte helpers
+    mod.rs         the Inspector trait and the shared byte helpers
     png.rs jpeg.rs gif.rs pdf.rs zip.rs elf.rs wav.rs
 ```
 
-To add a format, write an `inspect/<fmt>.rs` that implements `Inspector`, add
-its signature to `detect.rs`, and register it in `inspector_for`.
+Adding a format takes three steps: write an `inspect/<name>.rs` that implements
+`Inspector`, add the format's signature to `detect.rs`, and register it in
+`inspector_for`.
 
-Parsing is done by hand with bounds-checked byte helpers, so the dependency
-list stays short (clap, serde, anyhow) and malformed input returns an error
-rather than panicking. A few of the numbers are estimates rather than exact
-counts. PDF page counts are the main example, since pages can hide inside
-compressed object streams that a raw byte scan does not see.
+Every format is parsed by hand with bounds-checked helpers, so bad or truncated
+input returns an error instead of crashing, and the only dependencies are clap,
+serde, and anyhow. A couple of numbers are estimates rather than exact counts;
+PDF page counts are the main one, since pages can hide inside compressed parts
+that a quick scan won't see.
 
 ## License
 
-MIT OR Apache-2.0
+Dual-licensed under either [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE),
+whichever you prefer.
