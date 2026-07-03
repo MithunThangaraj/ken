@@ -8,6 +8,10 @@ repository = "https://github.com/MithunThangaraj/ken"
 keywords = ["file", "inspect", "metadata", "detect", "cli"]
 categories = ["command-line-utilities", "filesystem"]
 
+[lib]
+name = "ken"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ken"
 path = "src/main.rs"

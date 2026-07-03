@@ -46,7 +46,10 @@ impl Inspector for Wav {
         m.insert("codec".into(), Value::from(format_name(audio_format)));
         m.insert("channels".into(), Value::from(channels));
         m.insert("rate".into(), Value::from(format!("{sample_rate} Hz")));
-        m.insert("depth".into(), Value::from(format!("{bits_per_sample}-bit")));
+        m.insert(
+            "depth".into(),
+            Value::from(format!("{bits_per_sample}-bit")),
+        );
         if byte_rate > 0 && data_len > 0 {
             let seconds = data_len as f64 / byte_rate as f64;
             m.insert("duration".into(), Value::from(format!("{seconds:.2} s")));

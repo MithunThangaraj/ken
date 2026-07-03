@@ -18,7 +18,11 @@ impl Inspector for Gif {
         let height = le_u16(data, 8).unwrap_or(0);
         let packed = data[10];
         let has_gct = packed & 0x80 != 0;
-        let gct_size = if has_gct { 2usize.pow((packed & 0x07) as u32 + 1) } else { 0 };
+        let gct_size = if has_gct {
+            2usize.pow((packed & 0x07) as u32 + 1)
+        } else {
+            0
+        };
 
         // Skip the global color table if present: 3 bytes per entry.
         let mut i = 13usize + gct_size * 3;
