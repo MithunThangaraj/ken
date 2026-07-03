@@ -15,7 +15,8 @@ pub struct Zip;
 
 impl Inspector for Zip {
     fn inspect(&self, data: &[u8]) -> Result<Map<String, Value>> {
-        let eocd = find_eocd(data).ok_or_else(|| anyhow::anyhow!("no end-of-central-directory record"))?;
+        let eocd =
+            find_eocd(data).ok_or_else(|| anyhow::anyhow!("no end-of-central-directory record"))?;
 
         let total_entries = le_u16(data, eocd + 10).unwrap_or(0);
         let cd_offset = le_u32(data, eocd + 16).unwrap_or(0) as usize;
@@ -61,7 +62,12 @@ impl Inspector for Zip {
         }
         m.insert("encrypted".into(), Value::from(any_encrypted));
 
-        let shown: Vec<Value> = names.iter().take(MAX_LISTED_NAMES).cloned().map(Value::from).collect();
+        let shown: Vec<Value> = names
+            .iter()
+            .take(MAX_LISTED_NAMES)
+            .cloned()
+            .map(Value::from)
+            .collect();
         m.insert("names".into(), Value::from(shown));
         Ok(m)
     }

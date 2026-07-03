@@ -32,7 +32,8 @@ impl Inspector for Jpeg {
                 continue;
             }
             // Standalone markers carry no length payload.
-            if marker == 0xD8 || marker == 0xD9 || marker == 0x01 || (0xD0..=0xD7).contains(&marker) {
+            if marker == 0xD8 || marker == 0xD9 || marker == 0x01 || (0xD0..=0xD7).contains(&marker)
+            {
                 i += 2;
                 continue;
             }
@@ -75,7 +76,11 @@ impl Inspector for Jpeg {
         m.insert("components".into(), Value::from(components));
         m.insert(
             "mode".into(),
-            Value::from(if progressive { "progressive" } else { "baseline" }),
+            Value::from(if progressive {
+                "progressive"
+            } else {
+                "baseline"
+            }),
         );
         m.insert("jfif".into(), Value::from(jfif));
         m.insert("exif".into(), Value::from(exif));

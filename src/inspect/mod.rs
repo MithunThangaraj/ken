@@ -41,17 +41,21 @@ pub fn inspector_for(format: Format) -> Option<Box<dyn Inspector>> {
 // parse untrusted input safely with `?` / `ok_or`.
 
 pub(crate) fn be_u16(data: &[u8], offset: usize) -> Option<u16> {
-    data.get(offset..offset + 2).map(|b| u16::from_be_bytes([b[0], b[1]]))
+    data.get(offset..offset + 2)
+        .map(|b| u16::from_be_bytes([b[0], b[1]]))
 }
 
 pub(crate) fn be_u32(data: &[u8], offset: usize) -> Option<u32> {
-    data.get(offset..offset + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
+    data.get(offset..offset + 4)
+        .map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 pub(crate) fn le_u16(data: &[u8], offset: usize) -> Option<u16> {
-    data.get(offset..offset + 2).map(|b| u16::from_le_bytes([b[0], b[1]]))
+    data.get(offset..offset + 2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
 }
 
 pub(crate) fn le_u32(data: &[u8], offset: usize) -> Option<u32> {
-    data.get(offset..offset + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    data.get(offset..offset + 4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }

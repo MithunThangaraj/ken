@@ -26,8 +26,10 @@ impl Inspector for Pdf {
         // with no space. Count both spellings and subtract the `/Pages` tree
         // nodes, which share the prefix. (Object streams can hide pages from a
         // raw byte scan; this is a best-effort estimate, not a full parse.)
-        let page_nodes = count_occurrences(data, b"/Type /Page") + count_occurrences(data, b"/Type/Page");
-        let pages_nodes = count_occurrences(data, b"/Type /Pages") + count_occurrences(data, b"/Type/Pages");
+        let page_nodes =
+            count_occurrences(data, b"/Type /Page") + count_occurrences(data, b"/Type/Page");
+        let pages_nodes =
+            count_occurrences(data, b"/Type /Pages") + count_occurrences(data, b"/Type/Pages");
         let pages = page_nodes.saturating_sub(pages_nodes);
         let encrypted = contains(data, b"/Encrypt");
         // A linearized PDF advertises "/Linearized" in its first object.

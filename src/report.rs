@@ -36,7 +36,10 @@ pub fn inspect_path(path: &Path, detect_only: bool) -> Result<Report> {
                 Err(err) => {
                     // Detection worked but parsing the body failed. Report it as
                     // a warning instead of failing the whole file.
-                    details.insert("warning".into(), Value::String(format!("extraction failed: {err:#}")));
+                    details.insert(
+                        "warning".into(),
+                        Value::String(format!("extraction failed: {err:#}")),
+                    );
                 }
             }
         }
@@ -71,7 +74,11 @@ fn render_value(value: &Value) -> String {
         Value::String(s) => s.clone(),
         Value::Bool(b) => b.to_string(),
         Value::Null => "(none)".to_string(),
-        Value::Array(items) => items.iter().map(render_value).collect::<Vec<_>>().join(", "),
+        Value::Array(items) => items
+            .iter()
+            .map(render_value)
+            .collect::<Vec<_>>()
+            .join(", "),
         other => other.to_string(),
     }
 }

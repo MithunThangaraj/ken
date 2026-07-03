@@ -4,14 +4,11 @@
 //! out its metadata. Output is human-readable by default; `--json` produces a
 //! machine-readable document.
 
-mod detect;
-mod inspect;
-mod report;
-
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use ken::report;
 use serde_json::Value;
 
 #[derive(Parser)]
@@ -44,7 +41,8 @@ fn main() -> ExitCode {
         match report::inspect_path(path, cli.detect_only) {
             Ok(report) => {
                 if cli.json {
-                    json_reports.push(serde_json::to_value(&report).expect("report is serializable"));
+                    json_reports
+                        .push(serde_json::to_value(&report).expect("report is serializable"));
                 } else {
                     if idx > 0 {
                         println!();
@@ -73,7 +71,10 @@ fn main() -> ExitCode {
         } else {
             Value::Array(json_reports)
         };
-        println!("{}", serde_json::to_string_pretty(&out).expect("json serializable"));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&out).expect("json serializable")
+        );
     }
 
     if had_error {
