@@ -112,11 +112,33 @@ impl Report {
     /// Prints the human-readable report to stdout.
     pub fn print_human(&self) {
         println!("{}", self.path);
-        println!("  type     {} ({})", self.format, self.category);
-        println!("  mime     {}", self.mime);
-        println!("  size     {}", human_size(self.size_bytes));
+
+        // Line values up under the longest key, whatever it happens to be.
+        let width = self
+            .details
+            .keys()
+            .map(String::len)
+            .chain(["type".len()])
+            .max()
+            .unwrap_or(4);
+
+        // The category is only worth showing when it adds something the format
+        // name doesn't already say (e.g. "ELF binary" is an "executable").
+        let type_line = if self
+            .format
+            .to_lowercase()
+            .contains(&self.category.to_lowercase())
+        {
+            self.format.clone()
+        } else {
+            format!("{} ({})", self.format, self.category)
+        };
+
+        println!("  {:<width$} {}", "type", type_line);
+        println!("  {:<width$} {}", "mime", self.mime);
+        println!("  {:<width$} {}", "size", human_size(self.size_bytes));
         for (key, value) in &self.details {
-            println!("  {:<8} {}", key, render_value(value));
+            println!("  {:<width$} {}", key, render_value(value));
         }
     }
 }
