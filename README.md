@@ -2,37 +2,49 @@
 
 [![CI](https://github.com/MithunThangaraj/ken/actions/workflows/ci.yml/badge.svg)](https://github.com/MithunThangaraj/ken/actions/workflows/ci.yml)
 
-**Tell me what this file is, and what's inside it.**
+**See who really wrote that Word document, and what else it's hiding.**
 
-Point `ken` at any file and it figures out the format from the file's actual
-contents (not its name) and reads out the useful facts: how big an image is,
-how long an audio clip runs, how many pages a PDF has, what's packed inside a
-zip. One command, one small binary, no setup.
+Every Office file carries metadata most people never see: the author's name,
+who saved it last, how many times it has been revised, and when it was first
+created and last changed. `ken` reads it straight out of the file.
 
 ```
-$ ken photo.jpg
-photo.jpg
-  type     JPEG image (image)
-  mime     image/jpeg
-  size     2.1 MiB (2201234 bytes)
-  width    4032
-  height   3024
-  depth    8
-  components 3
-  mode     baseline
-  jfif     true
-  exif     false
+$ ken report.docx
+report.docx
+  type     Word document (document)
+  mime     application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  size     1.3 KiB (1283 bytes)
+  entries  5
+  title    Q3 Financial Summary
+  author   Jane Doe
+  last_by  Bob Smith
+  revision 17
+  created  2024-01-15T09:12:00Z
+  modified 2024-03-02T14:48:00Z
+  app      Microsoft Office Word
+  edit_time 428 min
+  company  Acme Corp
+  pages    12
+  words    3450
 ```
 
-Rename `photo.jpg` to `photo.txt` and `ken` still knows it's a JPEG, because it
-reads the bytes rather than trusting the extension.
+A `.docx` is really a zip full of XML, and that metadata sits compressed inside
+`docProps/core.xml`, out of reach of a plain unzip. `ken` opens the archive,
+decompresses those parts, and pulls the fields out. The same works for `.xlsx`
+and `.pptx`.
+
+It isn't only for Office files. Point `ken` at anything and it identifies the
+format from the bytes (not the file name) and reports what it finds: image
+sizes, audio length, PDF page counts, what a binary targets. One command, one
+small binary, no setup.
 
 ## Why it exists
 
 A few tools already do parts of this. The `file` command names a file's type
 but tells you little else. `exiftool` and `mediainfo` go deep, but only on
-photos, audio, and video. `ken` does both jobs, naming the format and pulling
-out its details, across many kinds of files, all from a single binary.
+photos, audio, and video, and neither cracks open an Office document for you.
+`ken` does both jobs, naming the format and pulling out its details, across
+many kinds of files, all from a single binary.
 
 ## Install
 
@@ -65,7 +77,8 @@ Right now `ken` handles one common format from each major category:
 | JPEG   | image      | size, color components, baseline vs progressive, JFIF/Exif tags |
 | GIF    | image      | size, frame count, whether it animates and loops |
 | PDF    | document   | version, object and page counts, encryption, linearization |
-| ZIP    | archive    | number of entries, sizes, compression ratio, file names, and whether it's really a DOCX/XLSX/PPTX/JAR/EPUB |
+| ZIP    | archive    | number of entries, sizes, compression ratio, file names |
+| DOCX / XLSX / PPTX | document | everything from ZIP, plus author, last editor, revision count, created/modified times, editing minutes, app, page and word counts |
 | ELF    | program    | 32/64-bit, endianness, target OS, executable vs library, CPU architecture |
 | WAV    | audio      | codec, channels, sample rate, bit depth, length in seconds |
 
@@ -88,10 +101,11 @@ Adding a format takes three steps: write an `inspect/<name>.rs` that implements
 `inspector_for`.
 
 Every format is parsed by hand with bounds-checked helpers, so bad or truncated
-input returns an error instead of crashing, and the only dependencies are clap,
-serde, and anyhow. A couple of numbers are estimates rather than exact counts;
-PDF page counts are the main one, since pages can hide inside compressed parts
-that a quick scan won't see.
+input returns an error instead of crashing. The dependencies are small: clap,
+serde, anyhow, and miniz_oxide for the deflate decompression that reading zip
+entries needs. A couple of numbers are estimates rather than exact counts; PDF
+page counts are the main one, since pages can hide inside compressed parts that
+a quick scan won't see.
 
 ## License
 
