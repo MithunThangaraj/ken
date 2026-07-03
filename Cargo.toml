@@ -1,0 +1,23 @@
+[package]
+name = "ken"
+version = "0.1.0"
+edition = "2021"
+description = "Universal file inspector that detects file types and reads out structured metadata from many formats"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MithunThangaraj/ken"
+keywords = ["file", "inspect", "metadata", "detect", "cli"]
+categories = ["command-line-utilities", "filesystem"]
+
+[[bin]]
+name = "ken"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+anyhow = "1"
+
+[profile.release]
+strip = true
+lto = true
