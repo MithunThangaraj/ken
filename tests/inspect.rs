@@ -109,36 +109,43 @@ fn elf() -> Vec<u8> {
     v
 }
 
-/// A stored (uncompressed) ZIP archive containing the given files.
-fn zip_stored(files: &[(&str, &[u8])]) -> Vec<u8> {
+/// A ZIP archive. Each entry is `(name, contents, deflate?)`; when `deflate` is
+/// set the contents are compressed so the inflate path gets exercised too.
+fn zip(files: &[(&str, &[u8], bool)]) -> Vec<u8> {
     let mut out = Vec::new();
-    let mut offsets = Vec::new();
+    let mut central = Vec::new();
 
-    for (name, data) in files {
-        offsets.push(out.len() as u32);
-        out.extend_from_slice(b"PK\x03\x04");
-        out.extend_from_slice(&[20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // version..crc
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // compressed size
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // uncompressed size
-        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+    for (name, contents, deflate) in files {
+        let offset = out.len() as u32;
+        let (method, stored) = if *deflate {
+            (8u16, miniz_oxide::deflate::compress_to_vec(contents, 6))
+        } else {
+            (0u16, contents.to_vec())
+        };
+        let write_header = |buf: &mut Vec<u8>, sig: &[u8], extra_leading: &[u8]| {
+            buf.extend_from_slice(sig);
+            buf.extend_from_slice(extra_leading); // version fields, up to flags
+            buf.extend_from_slice(&method.to_le_bytes());
+            buf.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // time, date, crc-lo (crc unused)
+            buf.extend_from_slice(&[0, 0]); // crc-hi
+            buf.extend_from_slice(&(stored.len() as u32).to_le_bytes()); // compressed size
+            buf.extend_from_slice(&(contents.len() as u32).to_le_bytes()); // uncompressed size
+            buf.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        };
+
+        write_header(&mut out, b"PK\x03\x04", &[20, 0, 0, 0]); // version needed, flags
         out.extend_from_slice(&[0, 0]); // extra len
         out.extend_from_slice(name.as_bytes());
-        out.extend_from_slice(data);
+        out.extend_from_slice(&stored);
+
+        write_header(&mut central, b"PK\x01\x02", &[20, 0, 20, 0, 0, 0]); // versions, flags
+        central.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]); // extra, comment, disk, internal attr
+        central.extend_from_slice(&[0, 0, 0, 0]); // external attr
+        central.extend_from_slice(&offset.to_le_bytes());
+        central.extend_from_slice(name.as_bytes());
     }
 
     let cd_offset = out.len() as u32;
-    let mut central = Vec::new();
-    for (i, (name, data)) in files.iter().enumerate() {
-        central.extend_from_slice(b"PK\x01\x02");
-        central.extend_from_slice(&[20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // versions..crc
-        central.extend_from_slice(&(data.len() as u32).to_le_bytes()); // compressed size
-        central.extend_from_slice(&(data.len() as u32).to_le_bytes()); // uncompressed size
-        central.extend_from_slice(&(name.len() as u16).to_le_bytes());
-        central.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]); // extra, comment, disk, internal attr
-        central.extend_from_slice(&[0, 0, 0, 0]); // external attr
-        central.extend_from_slice(&offsets[i].to_le_bytes());
-        central.extend_from_slice(name.as_bytes());
-    }
     let cd_size = central.len() as u32;
     out.extend_from_slice(&central);
 
@@ -151,6 +158,12 @@ fn zip_stored(files: &[(&str, &[u8])]) -> Vec<u8> {
     out.extend_from_slice(&cd_offset.to_le_bytes());
     out.extend_from_slice(&[0, 0]); // comment len
     out
+}
+
+/// A stored (uncompressed) ZIP archive containing the given files.
+fn zip_stored(files: &[(&str, &[u8])]) -> Vec<u8> {
+    let entries: Vec<(&str, &[u8], bool)> = files.iter().map(|(n, d)| (*n, *d, false)).collect();
+    zip(&entries)
 }
 
 // ---- tests -----------------------------------------------------------------
@@ -241,6 +254,43 @@ fn zip_recognizes_docx_container() {
     ]);
     let (_, f) = analyze(&data);
     assert_eq!(f["format"], "DOCX (OOXML)");
+}
+
+#[test]
+fn docx_metadata_is_extracted_from_compressed_parts() {
+    let core = r#"<?xml version="1.0"?>
+        <cp:coreProperties xmlns:cp="core" xmlns:dc="dc" xmlns:dcterms="terms">
+        <dc:title>Q3 Financial Summary</dc:title>
+        <dc:creator>Jane Doe</dc:creator>
+        <cp:lastModifiedBy>Bob Smith</cp:lastModifiedBy>
+        <cp:revision>17</cp:revision>
+        <dcterms:created xsi:type="dcterms:W3CDTF">2024-01-15T09:12:00Z</dcterms:created>
+        <dcterms:modified xsi:type="dcterms:W3CDTF">2024-03-02T14:48:00Z</dcterms:modified>
+        </cp:coreProperties>"#;
+    let app = r#"<?xml version="1.0"?>
+        <Properties><Application>Microsoft Office Word</Application>
+        <TotalTime>428</TotalTime><Company>Acme Corp</Company></Properties>"#;
+
+    // The metadata parts are deflated, the way a real Office file stores them.
+    let data = zip(&[
+        ("[Content_Types].xml", b"<Types/>", false),
+        ("word/document.xml", b"<document/>", true),
+        ("docProps/core.xml", core.as_bytes(), true),
+        ("docProps/app.xml", app.as_bytes(), true),
+    ]);
+    let (fmt, f) = analyze(&data);
+
+    assert_eq!(fmt, Format::Zip);
+    assert_eq!(f["format"], "DOCX (OOXML)");
+    assert_eq!(f["title"], "Q3 Financial Summary");
+    assert_eq!(f["author"], "Jane Doe");
+    assert_eq!(f["last_by"], "Bob Smith");
+    assert_eq!(f["revision"], "17");
+    assert_eq!(f["created"], "2024-01-15T09:12:00Z");
+    assert_eq!(f["modified"], "2024-03-02T14:48:00Z");
+    assert_eq!(f["app"], "Microsoft Office Word");
+    assert_eq!(f["edit_time"], "428 min");
+    assert_eq!(f["company"], "Acme Corp");
 }
 
 #[test]

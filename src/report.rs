@@ -45,13 +45,66 @@ pub fn inspect_path(path: &Path, detect_only: bool) -> Result<Report> {
         }
     }
 
-    Ok(Report {
+    let mut report = Report {
         path: path.display().to_string(),
         category: det.category.to_string(),
         format: det.format_name.to_string(),
         mime: det.mime.to_string(),
         size_bytes: size,
         details,
+    };
+
+    // A ZIP is often really a Word, Excel, or PowerPoint file. When the
+    // inspector recognized one, show that as the headline type instead of the
+    // generic "ZIP archive", and drop the now-redundant detail field.
+    if let Some(Value::String(kind)) = report.details.get("format").cloned() {
+        if let Some((label, mime, category)) = container_type(&kind) {
+            report.format = label.to_string();
+            report.mime = mime.to_string();
+            report.category = category.to_string();
+            // Drop the "format" field without disturbing the order of the rest
+            // (Map::remove would swap the last entry into its place).
+            report.details = std::mem::take(&mut report.details)
+                .into_iter()
+                .filter(|(key, _)| key != "format")
+                .collect();
+        }
+    }
+
+    Ok(report)
+}
+
+/// Maps a recognized ZIP container to a display name, MIME type, and category.
+fn container_type(kind: &str) -> Option<(&'static str, &'static str, &'static str)> {
+    Some(match kind {
+        "DOCX (OOXML)" => (
+            "Word document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "document",
+        ),
+        "XLSX (OOXML)" => (
+            "Excel spreadsheet",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "document",
+        ),
+        "PPTX (OOXML)" => (
+            "PowerPoint presentation",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "document",
+        ),
+        "OOXML" => (
+            "Office Open XML document",
+            "application/octet-stream",
+            "document",
+        ),
+        "EPUB" => ("EPUB book", "application/epub+zip", "document"),
+        "OpenDocument" => (
+            "OpenDocument file",
+            "application/vnd.oasis.opendocument",
+            "document",
+        ),
+        "JAR" => ("Java archive", "application/java-archive", "archive"),
+        _ => return None,
     })
 }
 
@@ -59,11 +112,33 @@ impl Report {
     /// Prints the human-readable report to stdout.
     pub fn print_human(&self) {
         println!("{}", self.path);
-        println!("  type     {} ({})", self.format, self.category);
-        println!("  mime     {}", self.mime);
-        println!("  size     {}", human_size(self.size_bytes));
+
+        // Line values up under the longest key, whatever it happens to be.
+        let width = self
+            .details
+            .keys()
+            .map(String::len)
+            .chain(["type".len()])
+            .max()
+            .unwrap_or(4);
+
+        // The category is only worth showing when it adds something the format
+        // name doesn't already say (e.g. "ELF binary" is an "executable").
+        let type_line = if self
+            .format
+            .to_lowercase()
+            .contains(&self.category.to_lowercase())
+        {
+            self.format.clone()
+        } else {
+            format!("{} ({})", self.format, self.category)
+        };
+
+        println!("  {:<width$} {}", "type", type_line);
+        println!("  {:<width$} {}", "mime", self.mime);
+        println!("  {:<width$} {}", "size", human_size(self.size_bytes));
         for (key, value) in &self.details {
-            println!("  {:<8} {}", key, render_value(value));
+            println!("  {:<width$} {}", key, render_value(value));
         }
     }
 }
